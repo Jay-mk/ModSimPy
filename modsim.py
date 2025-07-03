@@ -41,42 +41,44 @@ if sys.version_info < (3, 6):
     logger.warning("modsim.py depends on Python 3.6 features.")
 
 import inspect
+import numbers
 
 import matplotlib.pyplot as plt
 
-plt.rcParams['figure.dpi'] = 75
-plt.rcParams['savefig.dpi'] = 300
-plt.rcParams['figure.figsize'] = 6, 4
+plt.rcParams["figure.dpi"] = 75
+plt.rcParams["savefig.dpi"] = 300
+plt.rcParams["figure.figsize"] = 6, 4
+
+from copy import copy
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import scipy
-
 import scipy.optimize as spo
-
-from scipy.interpolate import interp1d
-from scipy.interpolate import InterpolatedUnivariateSpline
-
 from scipy.integrate import solve_ivp
-
-from types import SimpleNamespace
-from copy import copy
+from scipy.interpolate import InterpolatedUnivariateSpline, interp1d
 
 # Input validation helpers
+
+
 def validate_numeric(value, name):
     """Validate that a value is numeric."""
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, numbers.Number):
         raise ValueError(f"{name} must be numeric, got {type(value)}")
 
+
 def validate_array_like(value, name):
-    """Validate that a value is array-like."""
-    if not isinstance(value, (list, tuple, np.ndarray, pd.Series)):
+    """Validate that a value is array-like by checking for __getitem__ and __iter__."""
+    if not (hasattr(value, "__getitem__") and hasattr(value, "__iter__")):
         raise ValueError(f"{name} must be array-like, got {type(value)}")
+
 
 def validate_positive(value, name):
     """Validate that a value is positive."""
     if value <= 0:
         raise ValueError(f"{name} must be positive, got {value}")
+
 
 def flip(p=0.5):
     """Flips a coin with the given probability.
@@ -108,7 +110,9 @@ def cart2pol(x, y, z=None):
         raise ValueError("x must be numeric or array-like")
     if not isinstance(y, (int, float, list, tuple, np.ndarray, pd.Series)):
         raise ValueError("y must be numeric or array-like")
-    if z is not None and not isinstance(z, (int, float, list, tuple, np.ndarray, pd.Series)):
+    if z is not None and not isinstance(
+        z, (int, float, list, tuple, np.ndarray, pd.Series)
+    ):
         raise ValueError("z must be numeric or array-like")
     x = np.asarray(x)
     y = np.asarray(y)
@@ -138,7 +142,9 @@ def pol2cart(theta, rho, z=None):
         raise ValueError("theta must be numeric or array-like")
     if not isinstance(rho, (int, float, list, tuple, np.ndarray, pd.Series)):
         raise ValueError("rho must be numeric or array-like")
-    if z is not None and not isinstance(z, (int, float, list, tuple, np.ndarray, pd.Series)):
+    if z is not None and not isinstance(
+        z, (int, float, list, tuple, np.ndarray, pd.Series)
+    ):
         raise ValueError("z must be numeric or array-like")
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
@@ -147,7 +153,9 @@ def pol2cart(theta, rho, z=None):
     else:
         return x, y, z
 
+
 from numpy import linspace
+
 
 def linrange(start, stop=None, step=1):
     """Make an array of equally spaced values.
@@ -163,8 +171,8 @@ def linrange(start, stop=None, step=1):
     if stop is None:
         stop = start
         start = 0
-    n = int(round((stop-start) / step))
-    return linspace(start, stop, n+1)
+    n = int(round((stop - start) / step))
+    return linspace(start, stop, n + 1)
 
 
 def __check_kwargs(kwargs, param_name, param_len, func, func_name):
@@ -183,17 +191,24 @@ def __check_kwargs(kwargs, param_name, param_len, func, func_name):
     """
     param_val = kwargs.get(param_name, None)
     if param_val is None or len(param_val) not in param_len:
-        msg = ("To run `{}`, you have to provide a "
-               "`{}` keyword argument with a sequence of length {}.")
-        raise ValueError(msg.format(func_name, param_name, ' or '.join(map(str, param_len))))
+        msg = (
+            "To run `{}`, you have to provide a "
+            "`{}` keyword argument with a sequence of length {}."
+        )
+        raise ValueError(
+            msg.format(func_name, param_name, " or ".join(map(str, param_len)))
+        )
 
     try:
         func(param_val[0])
     except Exception as e:
-        msg = ("In `{}` I tried running the function you provided "
-               "with `{}[0]`, and I got the following error:")
+        msg = (
+            "In `{}` I tried running the function you provided "
+            "with `{}[0]`, and I got the following error:"
+        )
         logger.error(msg.format(func_name, param_name))
         raise (e)
+
 
 def root_scalar(func, *args, **kwargs):
     """Find the input value that is a root of `func`.
@@ -214,13 +229,15 @@ def root_scalar(func, *args, **kwargs):
     """
     underride(kwargs, rtol=1e-4)
 
-    __check_kwargs(kwargs, 'bracket', [2], lambda x: func(x, *args), 'root_scalar')
+    __check_kwargs(kwargs, "bracket", [2], lambda x: func(x, *args), "root_scalar")
 
     res = spo.root_scalar(func, *args, **kwargs)
 
     if not res.converged:
-        msg = ("scipy.optimize.root_scalar did not converge. "
-               "The message it returned is:\n" + res.flag)
+        msg = (
+            "scipy.optimize.root_scalar did not converge. "
+            "The message it returned is:\n" + res.flag
+        )
         raise ValueError(msg)
 
     return res
@@ -243,29 +260,30 @@ def minimize_scalar(func, *args, **kwargs):
     Raises:
         Exception: If the optimization does not succeed.
     """
-    underride(kwargs, __func_name='minimize_scalar')
+    underride(kwargs, __func_name="minimize_scalar")
 
-    method = kwargs.get('method', None)
+    method = kwargs.get("method", None)
     if method is None:
-        method = 'bounded' if kwargs.get('bounds', None) else 'brent'
-        kwargs['method'] = method
+        method = "bounded" if kwargs.get("bounds", None) else "brent"
+        kwargs["method"] = method
 
-    if method == 'bounded':
-        param_name = 'bounds'
+    if method == "bounded":
+        param_name = "bounds"
         param_len = [2]
     else:
-        param_name = 'bracket'
+        param_name = "bracket"
         param_len = [2, 3]
 
-    func_name = kwargs.pop('__func_name')
+    func_name = kwargs.pop("__func_name")
     __check_kwargs(kwargs, param_name, param_len, lambda x: func(x, *args), func_name)
 
     res = spo.minimize_scalar(func, args=args, **kwargs)
 
     if not res.success:
-        msg = ("minimize_scalar did not succeed."
-               "The message it returned is: \n" +
-               res.message)
+        msg = (
+            "minimize_scalar did not succeed."
+            "The message it returned is: \n" + res.message
+        )
         raise Exception(msg)
 
     return res
@@ -287,10 +305,11 @@ def maximize_scalar(func, *args, **kwargs):
     Raises:
         Exception: If the optimization does not succeed.
     """
+
     def min_func(*args):
         return -func(*args)
 
-    underride(kwargs, __func_name='maximize_scalar')
+    underride(kwargs, __func_name="maximize_scalar")
 
     res = minimize_scalar(min_func, *args, **kwargs)
 
@@ -344,7 +363,7 @@ def run_solve_ivp(system, slope_func, **options):
         raise (e)
 
     # get the list of event functions
-    events = options.get('events', [])
+    events = options.get("events", [])
 
     # if there's only one event function, put it in a list
     try:
@@ -354,7 +373,7 @@ def run_solve_ivp(system, slope_func, **options):
 
     for event_func in events:
         # make events terminal unless otherwise specified
-        if not hasattr(event_func, 'terminal'):
+        if not hasattr(event_func, "terminal"):
             event_func.terminal = True
 
         # test the event function with the initial conditions
@@ -369,25 +388,26 @@ def run_solve_ivp(system, slope_func, **options):
             raise (e)
 
     # get dense output unless otherwise specified
-    if not 't_eval' in options:
+    if not "t_eval" in options:
         underride(options, dense_output=True)
 
     # run the solver
-    bunch = solve_ivp(slope_func, [t_0, system.t_end], system.init,
-                      args=[system], **options)
+    bunch = solve_ivp(
+        slope_func, [t_0, system.t_end], system.init, args=[system], **options
+    )
 
     # separate the results from the details
     y = bunch.pop("y")
     t = bunch.pop("t")
 
     # get the column names from `init`, if possible
-    if hasattr(system.init, 'index'):
+    if hasattr(system.init, "index"):
         columns = system.init.index
     else:
         columns = range(len(system.init))
 
     # evaluate the results at equally-spaced points
-    if options.get('dense_output', False):
+    if options.get("dense_output", False):
         try:
             num = system.num
         except AttributeError:
@@ -397,11 +417,9 @@ def run_solve_ivp(system, slope_func, **options):
         y_array = bunch.sol(t_array)
 
         # pack the results into a TimeFrame
-        results = TimeFrame(y_array.T, index=t_array,
-                        columns=columns)
+        results = TimeFrame(y_array.T, index=t_array, columns=columns)
     else:
-        results = TimeFrame(y.T, index=t,
-                        columns=columns)
+        results = TimeFrame(y.T, index=t, columns=columns)
 
     return results, bunch
 
@@ -428,11 +446,8 @@ def leastsq(error_func, x0, *args, **options):
     best_params, cov_x, infodict, mesg, ier = t
 
     # pack the results into a ModSimSeries object
-    details = SimpleNamespace(cov_x=cov_x,
-                              mesg=mesg,
-                              ier=ier,
-                              **infodict)
-    details.success = details.ier in [1,2,3,4]
+    details = SimpleNamespace(cov_x=cov_x, mesg=mesg, ier=ier, **infodict)
+    details.success = details.ier in [1, 2, 3, 4]
 
     # if we got a Params object, we should return a Params object
     if isinstance(x0, Params):
@@ -668,6 +683,7 @@ class SettableNamespace(SimpleNamespace):
 
     Takes keyword arguments and stores them as attributes.
     """
+
     def __init__(self, namespace=None, **kwargs):
         """Initialize a SettableNamespace.
 
@@ -718,7 +734,7 @@ def magnitude(x):
     Returns:
         float: Magnitude as a plain number.
     """
-    return x.magnitude if hasattr(x, 'magnitude') else x
+    return x.magnitude if hasattr(x, "magnitude") else x
 
 
 def remove_units(namespace):
@@ -758,6 +774,7 @@ class System(SettableNamespace):
 
     Takes keyword arguments and stores them as attributes.
     """
+
     pass
 
 
@@ -766,6 +783,7 @@ class Params(SettableNamespace):
 
     Takes keyword arguments and stores them as attributes.
     """
+
     pass
 
 
@@ -778,7 +796,7 @@ def State(**variables):
     Returns:
         pd.Series: Series with the state variables.
     """
-    return pd.Series(variables, name='state')
+    return pd.Series(variables, name="state")
 
 
 def make_series(x, y, **options):
@@ -799,11 +817,11 @@ def make_series(x, y, **options):
     validate_array_like(y, "y")
     if len(x) != len(y):
         raise ValueError("x and y must have the same length")
-    underride(options, name='values')
+    underride(options, name="values")
     if isinstance(y, pd.Series):
         y = y.values
     series = pd.Series(y, index=x, **options)
-    series.index.name = 'index'
+    series.index.name = "index"
     return series
 
 
@@ -823,9 +841,9 @@ def TimeSeries(*args, **kwargs):
     else:
         series = pd.Series([], dtype=float)
 
-    series.index.name = 'Time'
-    if 'name' not in kwargs:
-        series.name = 'Quantity'
+    series.index.name = "Time"
+    if "name" not in kwargs:
+        series.name = "Quantity"
     return series
 
 
@@ -845,9 +863,9 @@ def SweepSeries(*args, **kwargs):
     else:
         series = pd.Series([], dtype=np.float64)
 
-    series.index.name = 'Parameter'
-    if 'name' not in kwargs:
-        series.name = 'Metric'
+    series.index.name = "Parameter"
+    if "name" not in kwargs:
+        series.name = "Metric"
     return series
 
 
@@ -863,9 +881,8 @@ def show(obj):
     if isinstance(obj, pd.Series):
         df = pd.DataFrame(obj)
         return df
-    elif hasattr(obj, '__dict__'):
-        return pd.DataFrame(pd.Series(obj.__dict__),
-                            columns=['value'])
+    elif hasattr(obj, "__dict__"):
+        return pd.DataFrame(pd.Series(obj.__dict__), columns=["value"])
     else:
         return obj
 
@@ -910,7 +927,7 @@ def Vector(x, y, z=None, **options):
     Returns:
         pd.Series: Series with keys 'x', 'y', and optionally 'z'.
     """
-    underride(options, name='component')
+    underride(options, name="component")
     if z is None:
         return pd.Series(dict(x=x, y=y), **options)
     else:
@@ -918,6 +935,7 @@ def Vector(x, y, z=None, **options):
 
 
 ## Vector functions (should work with any sequence)
+
 
 def vector_mag(v):
     """Vector magnitude.
@@ -1187,7 +1205,9 @@ def plot_segment(A, B, **options):
 
 
 from time import sleep
+
 from IPython.display import clear_output
+
 
 def animate(results, draw_func, *args, interval=None):
     """Animate results from a simulation.
